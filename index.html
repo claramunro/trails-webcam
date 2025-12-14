@@ -17,6 +17,36 @@
       justify-content: center;
       align-items: center;
       min-height: 100vh;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    #controls {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      z-index: 100;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 90%;
+    }
+    .effect-btn {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 25px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    .effect-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+    .effect-btn.active {
+      background: rgba(255, 255, 255, 0.9);
+      color: black;
     }
     #instructions {
       position: fixed;
@@ -24,7 +54,6 @@
       left: 50%;
       transform: translateX(-50%);
       color: rgba(255, 255, 255, 0.6);
-      font-family: system-ui, sans-serif;
       font-size: 14px;
       text-align: center;
       z-index: 100;
@@ -36,15 +65,21 @@
       left: 50%;
       transform: translate(-50%, -50%);
       color: white;
-      font-family: system-ui, sans-serif;
       font-size: 18px;
       z-index: 100;
     }
   </style>
 </head>
 <body>
-  <div id="loading">Loading pose detection...</div>
-  <div id="instructions">Move your hands to paint | Press 'C' to clear | Press 'S' to save</div>
+  <div id="loading">Loading...</div>
+
+  <div id="controls">
+    <button class="effect-btn active" data-effect="trails2">Body Trails</button>
+    <button class="effect-btn" data-effect="colortrip">Color Trip</button>
+    <button class="effect-btn" data-effect="natural">Natural Layers</button>
+  </div>
+
+  <div id="instructions">Press 'C' to clear | Press 'S' to save</div>
 
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0"></script>

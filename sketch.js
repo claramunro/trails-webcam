@@ -1,33 +1,42 @@
 // Trails - Webcam Edition
-// Body silhouette filled with live video - photo-like captures
-// Current body is always live, trails build up behind
+// Multiple effects with switchable modes
 
 let video;
 let bodyPixNet;
 let isModelReady = false;
+let needsBodyPix = true;
 
-// Trail buffer (history)
+// Buffers
 let trailBuffer;
-
-// Current body frame (always live)
 let currentBodyFrame;
 let currentSegmentation = null;
 
 // Settings
-const FRAME_SKIP = 15; // Capture trail every N frames
 let frameCount = 0;
+let hueOffset = 0;
+
+// Current effect mode
+let currentEffect = 'trails2'; // 'trails2', 'colortrip', 'natural'
+
+// Effect settings
+const SETTINGS = {
+  trails2: { frameSkip: 15, needsBodyPix: true },
+  colortrip: { frameSkip: 1, needsBodyPix: false },
+  natural: { frameSkip: 12, needsBodyPix: false }
+};
 
 async function setup() {
   createCanvas(windowWidth, windowHeight);
+  colorMode(HSB, 360, 100, 100, 100);
   pixelDensity(1);
   noSmooth();
 
-  // Create buffer for trail history
+  // Create buffers
   trailBuffer = createGraphics(width, height);
+  trailBuffer.colorMode(HSB, 360, 100, 100, 100);
   trailBuffer.noSmooth();
   trailBuffer.background(0);
 
-  // Create buffer for current body
   currentBodyFrame = createGraphics(640, 480);
   currentBodyFrame.pixelDensity(1);
 
@@ -35,6 +44,9 @@ async function setup() {
   video = createCapture(VIDEO);
   video.size(640, 480);
   video.hide();
+
+  // Set up button handlers
+  setupButtons();
 
   updateLoadingMessage('Loading AI model...');
 
@@ -57,6 +69,23 @@ async function setup() {
   }
 }
 
+function setupButtons() {
+  const buttons = document.querySelectorAll('.effect-btn');
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      // Update active state
+      buttons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      // Switch effect
+      currentEffect = btn.dataset.effect;
+
+      // Clear canvas when switching
+      trailBuffer.background(0);
+    });
+  });
+}
+
 function updateLoadingMessage(msg) {
   let loading = document.getElementById('loading');
   if (loading) loading.textContent = msg;
@@ -64,8 +93,10 @@ function updateLoadingMessage(msg) {
 
 async function draw() {
   frameCount++;
+  hueOffset = (hueOffset + 0.5) % 360;
 
-  if (!isModelReady) {
+  // Show loading for effects that need BodyPix
+  if (SETTINGS[currentEffect].needsBodyPix && !isModelReady) {
     background(0);
     fill(255);
     textAlign(CENTER, CENTER);
@@ -74,6 +105,22 @@ async function draw() {
     return;
   }
 
+  // Run the current effect
+  switch (currentEffect) {
+    case 'trails2':
+      await drawTrails2();
+      break;
+    case 'colortrip':
+      drawColorTrip();
+      break;
+    case 'natural':
+      drawNatural();
+      break;
+  }
+}
+
+// === EFFECT: Body Trails (trails2) ===
+async function drawTrails2() {
   // Get segmentation every frame for live body
   try {
     currentSegmentation = await bodyPixNet.segmentPerson(video.elt, {
@@ -86,8 +133,8 @@ async function draw() {
   }
 
   // Capture to trail buffer every N frames
-  if (frameCount % FRAME_SKIP === 0 && currentSegmentation) {
-    captureToTrail(currentSegmentation);
+  if (frameCount % SETTINGS.trails2.frameSkip === 0 && currentSegmentation) {
+    captureBodyToTrail(currentSegmentation);
   }
 
   // Draw trail history first
@@ -99,8 +146,7 @@ async function draw() {
   }
 }
 
-function captureToTrail(segmentation) {
-  // Create masked image for trail
+function captureBodyToTrail(segmentation) {
   let bodyFrame = createGraphics(640, 480);
   bodyFrame.pixelDensity(1);
 
@@ -124,7 +170,6 @@ function captureToTrail(segmentation) {
 
   bodyFrame.updatePixels();
 
-  // Add to trail buffer
   trailBuffer.push();
   trailBuffer.translate(width, 0);
   trailBuffer.scale(-width / 640, height / 480);
@@ -135,7 +180,6 @@ function captureToTrail(segmentation) {
 }
 
 function drawLiveBody(segmentation) {
-  // Draw current body directly to screen (live, no delay)
   video.loadPixels();
   currentBodyFrame.loadPixels();
 
@@ -156,12 +200,52 @@ function drawLiveBody(segmentation) {
 
   currentBodyFrame.updatePixels();
 
-  // Draw live body on top of everything
   push();
   translate(width, 0);
   scale(-width / 640, height / 480);
   image(currentBodyFrame, 0, 0);
   pop();
+}
+
+// === EFFECT: Color Trip (colortrip) ===
+function drawColorTrip() {
+  trailBuffer.push();
+  trailBuffer.translate(width, 0);
+  trailBuffer.scale(-width / 640, height / 480);
+
+  // Lighten blend mode - layers build up
+  trailBuffer.drawingContext.globalCompositeOperation = 'lighten';
+
+  // Rainbow color tint
+  trailBuffer.tint(hueOffset, 70, 100, 255);
+  trailBuffer.image(video, 0, 0);
+  trailBuffer.noTint();
+
+  trailBuffer.drawingContext.globalCompositeOperation = 'source-over';
+  trailBuffer.pop();
+
+  image(trailBuffer, 0, 0);
+}
+
+// === EFFECT: Natural Layers (natural) ===
+function drawNatural() {
+  // Only capture every N frames
+  if (frameCount % SETTINGS.natural.frameSkip === 0) {
+    trailBuffer.push();
+    trailBuffer.translate(width, 0);
+    trailBuffer.scale(-width / 640, height / 480);
+
+    // Lighten blend - layers stack
+    trailBuffer.drawingContext.globalCompositeOperation = 'lighten';
+
+    // No tint - natural colors
+    trailBuffer.image(video, 0, 0);
+
+    trailBuffer.drawingContext.globalCompositeOperation = 'source-over';
+    trailBuffer.pop();
+  }
+
+  image(trailBuffer, 0, 0);
 }
 
 function keyPressed() {
@@ -177,6 +261,7 @@ function keyPressed() {
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
   trailBuffer = createGraphics(width, height);
+  trailBuffer.colorMode(HSB, 360, 100, 100, 100);
   trailBuffer.noSmooth();
   trailBuffer.background(0);
 }
